@@ -5,7 +5,7 @@ import * as cmState from '@codemirror/state' // eslint-disable-line
 
 import { YRange } from './y-range.js'
 import { ySync, ySyncFacet, YSyncConfig, ySyncAnnotation } from './y-sync.js'
-import { yRemoteSelections, yRemoteSelectionsTheme } from './y-remote-selections.js'
+import { yRemoteSelections, yRemoteSelectionsTheme, yRemoteSelectionsLayer, yRemoteCursorsLayer } from './y-remote-selections.js'
 import { yUndoManager, yUndoManagerFacet, YUndoManagerConfig, undo, redo, yUndoManagerKeymap } from './y-undomanager.js'
 
 export { YRange, yRemoteSelections, yRemoteSelectionsTheme, ySync, ySyncFacet, YSyncConfig, ySyncAnnotation, yUndoManagerKeymap }
@@ -26,7 +26,9 @@ export const yCollab = (ytext, awareness, { undoManager = new Y.UndoManager(ytex
   if (awareness) {
     plugins.push(
       yRemoteSelectionsTheme,
-      yRemoteSelections
+      yRemoteSelections,
+      yRemoteSelectionsLayer,
+      yRemoteCursorsLayer
     )
   }
   if (undoManager !== false) {

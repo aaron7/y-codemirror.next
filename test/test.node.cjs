@@ -5,7 +5,7 @@ const path = require('path')
 const jsdom = require('jsdom')
 
 const documentContent = fs.readFileSync(path.join(__dirname, '../test.html'))
-const { window } = new jsdom.JSDOM(documentContent)
+const { window } = new jsdom.JSDOM(documentContent, { pretendToBeVisual: true })
 
 ;[
   'window',

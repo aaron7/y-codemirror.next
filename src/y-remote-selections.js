@@ -2,9 +2,7 @@
 import * as cmView from '@codemirror/view'
 
 import * as cmState from '@codemirror/state'
-import * as dom from 'lib0/dom'
-import * as pair from 'lib0/pair'
-import * as math from 'lib0/math'
+import * as object from 'lib0/object'
 
 import * as Y from 'yjs'
 import { ySyncFacet } from './y-sync.js'
@@ -17,13 +15,12 @@ export const yRemoteSelectionsTheme = cmView.EditorView.baseTheme({
     margin: '0px 2px 0px 4px'
   },
   '.cm-ySelectionCaret': {
-    position: 'relative',
+    position: 'absolute',
     borderLeft: '1px solid black',
     borderRight: '1px solid black',
     marginLeft: '-1px',
     marginRight: '-1px',
-    boxSizing: 'border-box',
-    display: 'inline'
+    boxSizing: 'border-box'
   },
   '.cm-ySelectionCaretDot': {
     borderRadius: '50%',
@@ -51,11 +48,11 @@ export const yRemoteSelectionsTheme = cmView.EditorView.baseTheme({
     lineHeight: 'normal',
     userSelect: 'none',
     color: 'white',
-    paddingLeft: '2px',
-    paddingRight: '2px',
+    padding: '2px 5px',
     zIndex: 101,
     transition: 'opacity .3s ease-in-out',
     backgroundColor: 'inherit',
+    borderRadius: '5px',
     // these should be separate
     opacity: 0,
     transitionDelay: '0s',
@@ -72,52 +69,6 @@ export const yRemoteSelectionsTheme = cmView.EditorView.baseTheme({
  * @type {cmState.AnnotationType<Array<number>>}
  */
 const yRemoteSelectionsAnnotation = cmState.Annotation.define()
-
-class YRemoteCaretWidget extends cmView.WidgetType {
-  /**
-   * @param {string} color
-   * @param {string} name
-   */
-  constructor (color, name) {
-    super()
-    this.color = color
-    this.name = name
-  }
-
-  toDOM () {
-    return /** @type {HTMLElement} */ (dom.element('span', [pair.create('class', 'cm-ySelectionCaret'), pair.create('style', `background-color: ${this.color}; border-color: ${this.color}`)], [
-      dom.text('\u2060'),
-      dom.element('div', [
-        pair.create('class', 'cm-ySelectionCaretDot')
-      ]),
-      dom.text('\u2060'),
-      dom.element('div', [
-        pair.create('class', 'cm-ySelectionInfo')
-      ], [
-        dom.text(this.name)
-      ]),
-      dom.text('\u2060')
-    ]))
-  }
-
-  eq (widget) {
-    return widget.color === this.color
-  }
-
-  compare (widget) {
-    return widget.color === this.color
-  }
-
-  updateDOM () {
-    return false
-  }
-
-  get estimatedHeight () { return -1 }
-
-  ignoreEvent () {
-    return true
-  }
-}
 
 export class YRemoteSelectionsPluginValue {
   /**
@@ -148,12 +99,7 @@ export class YRemoteSelectionsPluginValue {
    */
   update (update) {
     const ytext = this.conf.ytext
-    const ydoc = /** @type {Y.Doc} */ (ytext.doc)
     const awareness = this.conf.awareness
-    /**
-     * @type {Array<cmState.Range<cmView.Decoration>>}
-     */
-    const decorations = []
     const localAwarenessState = this.conf.awareness.getLocalState()
 
     // set local awareness state (update cursors)
@@ -176,82 +122,296 @@ export class YRemoteSelectionsPluginValue {
         awareness.setLocalStateField('cursor', null)
       }
     }
-
-    // update decorations (remote selections)
-    awareness.getStates().forEach((state, clientid) => {
-      if (clientid === awareness.doc.clientID) {
-        return
-      }
-      const cursor = state.cursor
-      if (cursor == null || cursor.anchor == null || cursor.head == null) {
-        return
-      }
-      const anchor = Y.createAbsolutePositionFromRelativePosition(cursor.anchor, ydoc)
-      const head = Y.createAbsolutePositionFromRelativePosition(cursor.head, ydoc)
-      if (anchor == null || head == null || anchor.type !== ytext || head.type !== ytext) {
-        return
-      }
-      const { color = '#30bced', name = 'Anonymous' } = state.user || {}
-      const colorLight = (state.user && state.user.colorLight) || color + '33'
-      const start = math.min(anchor.index, head.index)
-      const end = math.max(anchor.index, head.index)
-      const startLine = update.view.state.doc.lineAt(start)
-      const endLine = update.view.state.doc.lineAt(end)
-      if (startLine.number === endLine.number) {
-        // selected content in a single line.
-        decorations.push({
-          from: start,
-          to: end,
-          value: cmView.Decoration.mark({
-            attributes: { style: `background-color: ${colorLight}` },
-            class: 'cm-ySelection'
-          })
-        })
-      } else {
-        // selected content in multiple lines
-        // first, render text-selection in the first line
-        decorations.push({
-          from: start,
-          to: startLine.from + startLine.length,
-          value: cmView.Decoration.mark({
-            attributes: { style: `background-color: ${colorLight}` },
-            class: 'cm-ySelection'
-          })
-        })
-        // render text-selection in the last line
-        decorations.push({
-          from: endLine.from,
-          to: end,
-          value: cmView.Decoration.mark({
-            attributes: { style: `background-color: ${colorLight}` },
-            class: 'cm-ySelection'
-          })
-        })
-        for (let i = startLine.number + 1; i < endLine.number; i++) {
-          const linePos = update.view.state.doc.line(i).from
-          decorations.push({
-            from: linePos,
-            to: linePos,
-            value: cmView.Decoration.line({
-              attributes: { style: `background-color: ${colorLight}`, class: 'cm-yLineSelection' }
-            })
-          })
-        }
-      }
-      decorations.push({
-        from: head.index,
-        to: head.index,
-        value: cmView.Decoration.widget({
-          side: head.index - anchor.index > 0 ? -1 : 1, // the local cursor should be rendered outside the remote selection
-          block: false,
-          widget: new YRemoteCaretWidget(color, name)
-        })
-      })
-    })
-    this.decorations = cmView.Decoration.set(decorations, true)
   }
 }
 
-export const yRemoteSelections = cmView.ViewPlugin.fromClass(YRemoteSelectionsPluginValue, {
-  decorations: v => v.decorations
+export const yRemoteSelections = cmView.ViewPlugin.fromClass(YRemoteSelectionsPluginValue)
+
+/**
+ * An extended RectangleMarker that can be styled dynamically. Used to
+ * style remote selections with the user's color.
+ */
+class StyledRectangleMarker extends cmView.RectangleMarker {
+  /**
+   * @param {string} className
+   * @param {object} style
+   * @param {number} left
+   * @param {number} top
+   * @param {number} width
+   * @param {number} height
+   */
+  constructor (className, style, left, top, width, height) {
+    super(className, left, top, width, height)
+    this.style = style
+  }
+
+  draw () {
+    const elt = super.draw()
+    for (const key in this.style) {
+      elt.style[key] = this.style[key]
+    }
+    return elt
+  }
+
+  /**
+   * @param {cmView.EditorView} view
+   * @param {string} className
+   * @param {object} style
+   * @param {cmState.SelectionRange} range
+   */
+  static forRangeWithStyle (view, className, style, range) {
+    const rectangles = super.forRange(view, className, range)
+
+    return rectangles.map(
+      (rect) =>
+        new StyledRectangleMarker(
+          className,
+          style,
+          rect.left,
+          rect.top,
+          rect.width,
+          rect.height
+        )
+    )
+  }
+}
+
+/**
+ * @param {cmView.EditorView} view
+ */
+function getBase (view) {
+  const rect = view.scrollDOM.getBoundingClientRect()
+  const left =
+    view.textDirection === 0
+      ? rect.left
+      : rect.right - view.scrollDOM.clientWidth * view.scaleX
+  return {
+    left: left - view.scrollDOM.scrollLeft * view.scaleX,
+    top: rect.top - view.scrollDOM.scrollTop * view.scaleY
+  }
+}
+
+/**
+ * A RectangleMarker that draws a cursor for a remote selection.
+ */
+export class SelectionCaretRectangleMarker {
+  /**
+   * @param {string} className
+   * @param {object} style
+   * @param {string} name
+   * @param {number} left
+   * @param {number} top
+   * @param {number | null} width
+   * @param {number} height
+   */
+  constructor (
+    className,
+    style,
+    name,
+    left,
+    top,
+    width,
+    height
+  ) {
+    this.className = className
+    this.style = style
+    this.name = name
+    this.left = left
+    this.top = top
+    this.width = width
+    this.height = height
+  }
+
+  draw () {
+    // This element is copied from original y.js remote selection
+    // implementation, but given this is no longer a decoration we could update
+    // it's implementation.
+    const elt = document.createElement('div')
+    elt.className = this.className
+    for (const key in this.style) {
+      elt.style[key] = this.style[key]
+    }
+
+    elt.appendChild(document.createTextNode('\u2060'))
+
+    const dot = document.createElement('div')
+    dot.className = 'cm-ySelectionCaretDot'
+    elt.appendChild(dot)
+
+    elt.appendChild(document.createTextNode('\u2060'))
+    const info = document.createElement('div')
+    info.className = 'cm-ySelectionInfo'
+    info.appendChild(document.createTextNode(this.name))
+    elt.appendChild(info)
+
+    elt.appendChild(document.createTextNode('\u2060'))
+
+    this.adjust(elt)
+    return elt
+  }
+
+  /**
+   * @param {HTMLElement} elt
+   * @param {SelectionCaretRectangleMarker} prev
+   */
+  update (elt, prev) {
+    if (prev.className !== this.className || !object.equalFlat(prev.style, this.style)) return false
+    this.adjust(elt)
+    return true
+  }
+
+  /**
+   * @param {HTMLElement} elt
+   */
+  adjust (elt) {
+    elt.style.left = this.left + 'px'
+    elt.style.top = this.top + 'px'
+    if (this.width != null) elt.style.width = this.width + 'px'
+    elt.style.height = this.height + 'px'
+  }
+
+  /**
+   * @param {SelectionCaretRectangleMarker} p
+   */
+  eq (p) {
+    return (
+      this.left === p.left &&
+      this.top === p.top &&
+      this.width === p.width &&
+      this.height === p.height &&
+      this.className === p.className &&
+      object.equalFlat(this.style, p.style) &&
+      this.name === p.name
+    )
+  }
+
+  /**
+   * @param {cmView.EditorView} view
+   * @param {string} className
+   * @param {string} color
+   * @param {string} name
+   * @param {number} head
+   * @returns {SelectionCaretRectangleMarker}
+   */
+  static forRemoteCursor (view, className, color, name, head) {
+    const pos = view.coordsAtPos(head, 1)
+    if (!pos) return null
+    const base = getBase(view)
+    return new SelectionCaretRectangleMarker(
+      className,
+      {
+        backgroundColor: color,
+        borderColor: color
+      },
+      name,
+      pos.left - base.left,
+      pos.top - base.top,
+      null,
+      pos.bottom - pos.top
+    )
+  }
+}
+
+/**
+ * @param {cmView.EditorView} view
+ */
+const getRemoteSelections = (view) => {
+  const conf = view.state.facet(ySyncFacet)
+  if (!conf?.awareness) {
+    return
+  }
+  const awareness = conf.awareness
+
+  const ytext = conf.ytext
+  const ydoc = /** @type {Y.Doc} */ (ytext.doc)
+
+  const ranges = []
+
+  awareness.getStates().forEach((state, clientid) => {
+    if (clientid === awareness.doc.clientID) {
+      return
+    }
+    const cursor = state.cursor
+    if (cursor == null || cursor.anchor == null || cursor.head == null) {
+      return
+    }
+    const anchor = Y.createAbsolutePositionFromRelativePosition(
+      cursor.anchor,
+      ydoc
+    )
+    const head = Y.createAbsolutePositionFromRelativePosition(
+      cursor.head,
+      ydoc
+    )
+    if (
+      anchor == null ||
+      head == null ||
+      anchor.type !== ytext ||
+      head.type !== ytext
+    ) {
+      return
+    }
+    const { color = '#30bced', name = 'Anonymous' } = state.user || {}
+    const colorLight = (state.user && state.user.colorLight) || color
+    const range = cmState.EditorSelection.range(anchor.index, head.index)
+    ranges.push({ range, color, colorLight, name })
+  })
+
+  return ranges
+}
+
+export const yRemoteSelectionsLayer = cmView.layer({
+  above: false, // render below text
+  markers (view) {
+    return getRemoteSelections(view).map((r) => {
+      if (!r.range.empty) {
+        return StyledRectangleMarker.forRangeWithStyle(
+          view,
+          'cm-ySelection',
+          {
+            backgroundColor: r.colorLight
+          },
+          r.range
+        )
+      }
+      return []
+    }).reduce((a, b) => a.concat(b), [])
+  },
+  update (view) {
+    if (view.transactions.length > 0) {
+      if (view.transactions[0].annotation(yRemoteSelectionsAnnotation)) {
+        return true
+      }
+    }
+    return false
+  },
+  class: 'cm-yRemoteSelectionsLayer'
+})
+
+export const yRemoteCursorsLayer = cmView.layer({
+  above: true, // render above text to allow hovering
+  markers (view) {
+    return getRemoteSelections(view).map((r) => {
+      const marker = SelectionCaretRectangleMarker.forRemoteCursor(
+        view,
+        'cm-ySelectionCaret',
+        r.color,
+        r.name,
+        r.range.head
+      )
+      if (marker) {
+        return [marker]
+      }
+      return []
+    }).reduce((a, b) => a.concat(b), [])
+  },
+  update (view) {
+    if (view.transactions.length > 0) {
+      if (view.transactions[0].annotation(yRemoteSelectionsAnnotation)) {
+        return true
+      }
+    }
+    return false
+  },
+  class: 'cm-yRemoteCursorsLayer'
 })
